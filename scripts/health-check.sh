@@ -1,6 +1,6 @@
 #!/bin/bash
 
-URL=$1/health
+URL=$1/ping
 
 echo "Checking health endpoint..."
 

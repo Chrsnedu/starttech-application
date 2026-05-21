@@ -30,7 +30,7 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	if len(allowedOrigins) == 0 {
 		allowedOrigins = []string{
 			"http://localhost:5173",
-			"prod-starttech-frontend-d1581ec0.s3-website-us-east-1.amazonaws.com",
+			"http://prod-starttech-frontend-d1581ec0.s3-website-us-east-1.amazonaws.com",
 		}
 	}
 

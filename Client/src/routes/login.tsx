@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { apiClient, setAuthToken } from '@/lib/apiClient';
+import { apiClient, getApiErrorMessage, setAuthToken } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -49,9 +49,8 @@ function Login() {
             toast.success('Logged in successfully');
             navigate({ to: '/todos' });
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onError: (err: any) => {
-            const message = err.response?.data?.error || 'Invalid username or password';
+        onError: (error: unknown) => {
+            const message = getApiErrorMessage(error, 'Invalid username or password');
             setError(message);
             toast.error(message);
         },

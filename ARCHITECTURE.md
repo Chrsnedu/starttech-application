@@ -4,7 +4,7 @@
 
 - Built with React and Vite.
 - Compiled into static assets and deployed to S3.
-- Served globally through CloudFront.
+- Served from the S3 static website endpoint.
 - Reads the backend base URL from `VITE_API_BASE_URL`.
 
 ## Backend
@@ -12,7 +12,7 @@
 - Built with Go and Gin.
 - Packaged as a container image and stored in Amazon ECR.
 - Deployed to EC2 instances managed by an Auto Scaling Group behind an ALB.
-- Uses MongoDB Atlas for persistence and Redis for cache/session acceleration.
+- Uses MongoDB Atlas for persistence and Redis for cache acceleration when available.
 - Emits structured logs to stdout so the EC2 Docker runtime can ship them to CloudWatch.
 
 ## Deployment Topology
