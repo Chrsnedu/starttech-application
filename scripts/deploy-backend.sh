@@ -1,20 +1,35 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
-# Update the image pointer first, then let ASG instance refresh replace hosts gradually.
-: "${BACKEND_IMAGE_URI:?BACKEND_IMAGE_URI is required}"
-: "${BACKEND_IMAGE_PARAMETER_NAME:?BACKEND_IMAGE_PARAMETER_NAME is required}"
-: "${BACKEND_ASG_NAME:?BACKEND_ASG_NAME is required}"
-: "${AWS_REGION:=us-east-1}"
+IMAGE=$1
 
-aws ssm put-parameter \
-  --name "${BACKEND_IMAGE_PARAMETER_NAME}" \
-  --value "${BACKEND_IMAGE_URI}" \
-  --type String \
-  --overwrite \
-  --region "${AWS_REGION}"
+INSTANCE_IDS=$(aws ssm describe-instance-information \
+  --region us-east-1 \
+  --query "InstanceInformationList[*].InstanceId" \
+  --output text)
 
-aws autoscaling start-instance-refresh \
-  --auto-scaling-group-name "${BACKEND_ASG_NAME}" \
-  --preferences '{"MinHealthyPercentage":50,"InstanceWarmup":120}' \
-  --region "${AWS_REGION}"
+aws ssm send-command \
+  --instance-ids $INSTANCE_IDS \
+  --document-name "AWS-RunShellScript" \
+  --region us-east-1 \
+  --parameters 'commands=[
+    "MONGO_URI=$(aws ssm get-parameter --name /starttech/dev/mongo_uri --with-decryption --query Parameter.Value --output text --region us-east-1)",
+    "JWT_SECRET=$(aws ssm get-parameter --name /starttech/dev/jwt_secret --with-decryption --query Parameter.Value --output text --region us-east-1)",
+    "DB_NAME=$(aws ssm get-parameter --name /starttech/dev/db_name --query Parameter.Value --output text --region us-east-1)",
+
+    "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 093796422475.dkr.ecr.us-east-1.amazonaws.com",
+
+    "docker system prune -af || true",
+    "docker pull '"$IMAGE"'",
+
+    "docker stop backend || true",
+    "docker rm backend || true",
+
+    "docker run -d --name backend -p 8080:8080 \
+      -e PORT=8080 \
+      -e MONGO_URI=$MONGO_URI \
+      -e DB_NAME=$DB_NAME \
+      -e JWT_SECRET_KEY=$JWT_SECRET \
+      -e ENABLE_CACHE=true \
+      -e REDIS_ADDR='dev-redis.yd4jsv.0001.use1.cache.amazonaws.com' \
+      '"$IMAGE"'"
+  ]'

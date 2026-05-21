@@ -3,11 +3,12 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
+	"log"
+	// "strconv"
 	"time"
 
-	"github.com/Innocent9712/much-to-do/Server/MuchToDo/internal/config"
 	"github.com/redis/go-redis/v9"
+	"github.com/Innocent9712/much-to-do/Server/MuchToDo/internal/config"
 )
 
 // Cache defines the interface for a caching service.
@@ -29,11 +30,11 @@ type RedisCache struct {
 // It returns a real Redis client if caching is enabled, otherwise a no-op client.
 func NewCacheService(cfg config.Config) Cache {
 	if !cfg.EnableCache {
-		slog.Info("Caching is disabled.")
+		log.Println("Caching is disabled.")
 		return &NoOpCache{}
 	}
 
-	slog.Info("Caching is enabled. Connecting to Redis...")
+	log.Println("Caching is enabled. Connecting to Redis...")
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
@@ -42,12 +43,12 @@ func NewCacheService(cfg config.Config) Cache {
 
 	// Ping Redis to check the connection
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		// Fall back to a no-op cache so the API can stay available even when Redis is down.
-		slog.Warn("Could not connect to Redis. Falling back to no-op cache.", "error", err)
+		log.Fatalf("Could not connect to Redis: %v. Caching will be disabled.", err)
+		// Fallback to no-op cache if connection fails
 		return &NoOpCache{}
 	}
 
-	slog.Info("Successfully connected to Redis.")
+	log.Println("Successfully connected to Redis.")
 	return &RedisCache{client: rdb}
 }
 
@@ -74,7 +75,7 @@ func (r *RedisCache) SetMany(ctx context.Context, data map[string]interface{}, e
 		p, err := json.Marshal(value)
 		if err != nil {
 			// Log the error for the specific key but continue with the batch
-			slog.Warn("Error marshalling value for cache batch item", "key", key, "error", err)
+			log.Printf("Error marshalling value for key %s: %v", key, err)
 			continue
 		}
 		pipe.Set(ctx, key, p, expiration)

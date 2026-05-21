@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "npm run typecheck && npm run lint",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

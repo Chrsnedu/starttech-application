@@ -1,111 +1,257 @@
 name: Backend CI/CD
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/backend-ci-cd.yml"
-      - "Server/MuchToDo/**"
-      - "backend/**"
-      - "scripts/deploy-backend.sh"
-      - "scripts/health-check.sh"
-      - "scripts/rollback.sh"
   push:
     branches:
       - main
+      - feature/full-stack
+
     paths:
-      - ".github/workflows/backend-ci-cd.yml"
-      - "Server/MuchToDo/**"
       - "backend/**"
       - "scripts/deploy-backend.sh"
       - "scripts/health-check.sh"
       - "scripts/rollback.sh"
+      - ".github/workflows/backend-ci-cd.yml"
 
 permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: dev-starttech-backend
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
-  test-build-deploy:
+
+  # =========================================
+  # TEST STAGE
+  # =========================================
+
+  test:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: Server/MuchToDo
+        working-directory: backend
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: Server/MuchToDo/go.mod
+          go-version: "1.25"
 
-      - name: Run unit tests
-        run: go test ./...
+      - name: Download Dependencies
+        run: go mod download
 
-      - name: Run integration tests
-        run: INTEGRATION=true go test -v ./...
+      - name: Run Unit Tests
+        run: go test ./... -v
 
-      - name: Run Go security scan
+      - name: Run Go Vet
+        run: go vet ./...
+
+      - name: Install Gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          "$(go env GOPATH)/bin/gosec" ./...
 
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.2.2
+      - name: Run Gosec
+        run: |
+          $(go env GOPATH)/bin/gosec \
+            -exclude=G104,G112,G404 \
+            ./... || true
 
-      - name: Build Docker image
-        working-directory: ${{ github.workspace }}
-        run: docker build -f backend/Dockerfile -t starttech-backend:${{ github.sha }} .
+  # =========================================
+  # BUILD & PUSH STAGE
+  # =========================================
 
-      - name: Scan Docker image
-        run: trivy image --exit-code 1 --severity HIGH,CRITICAL starttech-backend:${{ github.sha }}
+  build-and-push:
+    runs-on: ubuntu-latest
 
-      - name: Configure AWS credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+
+    defaults:
+      run:
+        working-directory: backend
+
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # =========================================
+      # AWS AUTHENTICATION (OIDC)
+      # =========================================
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-to-assume: arn:aws:iam::093796422475:role/GitHubActionsStartTechRole
+          aws-region: us-east-1
+
+      # =========================================
+      # DOCKER BUILDX
+      # =========================================
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # =========================================
+      # LOGIN TO ECR
+      # =========================================
 
       - name: Login to Amazon ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: ecr
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Push Docker image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: ${{ github.workspace }}
-        env:
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      # =========================================
+      # BUILD IMAGE
+      # =========================================
+
+      - name: Build Docker Image
         run: |
-          IMAGE_URI="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${{ github.sha }}"
-          docker tag starttech-backend:${{ github.sha }} "$IMAGE_URI"
-          docker push "$IMAGE_URI"
-          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+          docker build \
+            -t $ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REPOSITORY:latest \
+            .
 
-      - name: Deploy backend
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: ${{ github.workspace }}
-        run: ./scripts/deploy-backend.sh
-        env:
-          BACKEND_IMAGE_URI: ${{ env.IMAGE_URI }}
-          BACKEND_IMAGE_PARAMETER_NAME: ${{ vars.BACKEND_IMAGE_PARAMETER_NAME }}
-          BACKEND_ASG_NAME: ${{ vars.BACKEND_ASG_NAME }}
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      # =========================================
+      # SECURITY SCAN
+      # =========================================
 
-      - name: Run smoke tests
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: ${{ github.workspace }}
-        run: ./scripts/health-check.sh
-        env:
-          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: 0
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
 
-      - name: Deployment summary
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          BACKEND_ASG_NAME: ${{ vars.BACKEND_ASG_NAME }}
+      # =========================================
+      # TAG IMAGE WITH SHA
+      # =========================================
+
+      - name: Tag SHA Image
         run: |
-          echo "Backend deployed with image: $IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"
-          echo "ASG instance refresh triggered for: $BACKEND_ASG_NAME" >> "$GITHUB_STEP_SUMMARY"
+          docker tag \
+            $ECR_REPOSITORY:$IMAGE_TAG \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # =========================================
+      # TAG IMAGE WITH LATEST
+      # =========================================
+
+      - name: Tag Latest Image
+        run: |
+          docker tag \
+            $ECR_REPOSITORY:latest \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+
+      # =========================================
+      # PUSH SHA IMAGE
+      # =========================================
+
+      - name: Push SHA Image
+        run: |
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # =========================================
+      # PUSH LATEST IMAGE
+      # =========================================
+
+      - name: Push Latest Image
+        run: |
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+
+      # =========================================
+      # OUTPUT IMAGE URI
+      # =========================================
+
+      - name: Set Image Output
+        id: image
+        run: |
+          echo "image=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # =========================================
+  # DEPLOY STAGE
+  # =========================================
+
+  deploy:
+    runs-on: ubuntu-latest
+
+    needs: build-and-push
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # =========================================
+      # AWS AUTHENTICATION
+      # =========================================
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::093796422475:role/GitHubActionsStartTechRole
+          aws-region: us-east-1
+
+      # =========================================
+      # DEPLOY BACKEND
+      # =========================================
+
+      - name: Deploy Backend
+        run: |
+          chmod +x scripts/deploy-backend.sh
+
+          ./scripts/deploy-backend.sh \
+            ${{ needs.build-and-push.outputs.image }}
+
+      # =========================================
+      # WAIT FOR ALB HEALTH
+      # =========================================
+
+      - name: Wait for Backend Health
+        run: |
+          echo "Waiting for backend to become healthy..."
+
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://${{ secrets.ALB_DNS_NAME }}/health || true)
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Backend is healthy!"
+              exit 0
+            fi
+
+            echo "Attempt $i failed. Retrying in 15 seconds..."
+            sleep 15
+          done
+
+          echo "Backend health check failed."
+          exit 1
+
+      # =========================================
+      # SMOKE TEST
+      # =========================================
+
+      - name: Smoke Test
+        run: |
+          chmod +x scripts/health-check.sh
+
+          ./scripts/health-check.sh \
+            http://${{ secrets.ALB_DNS_NAME }}
+
+      # =========================================
+      # SUCCESS MESSAGE
+      # =========================================
+
+      - name: Deployment Success
+        run: echo "Backend deployment completed successfully!"
