@@ -60,7 +60,7 @@ aws ssm send-command \
     "DB_NAME=$(aws ssm get-parameter --name /starttech/prod/db_name --query Parameter.Value --output text --region '"$REGION"')",
     "REDIS_HOST=$(aws ssm get-parameter --name /starttech/prod/redis_host --query Parameter.Value --output text --region '"$REGION"')",
 
-    "aws ecr get-login-password --region '"$REGION"' | docker login --username AWS --password-stdin 093796422475.dkr.ecr.us-east-1.amazonaws.com",
+    "aws ecr get-login-password --region '"$REGION"' | docker login --username AWS --password-stdin 327082974817.dkr.ecr.us-east-1.amazonaws.com",
 
     "docker system prune -af || true",
     "docker pull '"$IMAGE"'",
