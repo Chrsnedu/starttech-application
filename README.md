@@ -1,35 +1,82 @@
-# StartTech Application Delivery
+# StartTech Application
 
-This repository contains the full-stack application and the CI/CD workflows that deliver it. The source layout is `Client/` for the React frontend and `Server/MuchToDo/` for the Go API.
+This repository contains the application code and delivery workflows for the StartTech stack.
 
-## CI/CD Pipelines
+The active source layout is:
 
-- `frontend-ci-cd.yml`: installs dependencies, runs validation tests, builds the React app, audits packages, and syncs the static build to the production S3 website bucket.
-- `backend-ci-cd.yml`: runs Go tests, security scans, builds a Docker image, scans it with Trivy, pushes it to ECR, triggers an Auto Scaling rolling deployment, and runs smoke tests.
+- `frontend/`: React + Vite single-page app
+- `backend/`: Go + Gin API
+- `scripts/`: deployment, health-check, and rollback helpers
+- `.github/workflows/`: CI/CD pipelines
 
-## Required GitHub Secrets And Variables
+This repository is intended to deploy into the production AWS account `327082974817`.
+
+## Production Endpoints
+
+- Frontend website: `http://prod-starttech-frontend-d1581ec0.s3-website-us-east-1.amazonaws.com`
+- Backend ALB: `http://prod-backend-alb-823465914.us-east-1.elb.amazonaws.com`
+
+## Deployment Model
+
+- The frontend pipeline builds the app from `frontend/` and uploads the static bundle to the S3 website bucket.
+- The backend pipeline builds a Docker image from `backend/`, pushes it to ECR, and rolls the EC2 Auto Scaling Group.
+- Runtime secrets and connection settings are read from AWS Systems Manager Parameter Store.
+- Infrastructure is managed from the companion `starttech-infra` repository.
+
+## Required AWS Resources
+
+These values are supplied by the infrastructure stack:
+
+- ECR repository: `327082974817.dkr.ecr.us-east-1.amazonaws.com/prod-starttech-backend`
+- Frontend bucket: `prod-starttech-frontend-d1581ec0`
+- Backend log group: `/starttech/backend`
+- Redis endpoint: `prod-redis.kmcqk2.0001.use1.cache.amazonaws.com`
+
+## Required GitHub Configuration
+
+Secrets:
 
 - `AWS_GITHUB_ROLE_ARN`
-- `vars.AWS_REGION`
-- `vars.VITE_API_BASE_URL`
-- `vars.FRONTEND_BUCKET_NAME`
-- `vars.ECR_REPOSITORY`
-- `vars.BACKEND_IMAGE_PARAMETER_NAME`
-- `vars.BACKEND_ASG_NAME`
-- `vars.BACKEND_HEALTH_URL`
 
-## Application Configuration
+Variables:
 
-- Frontend production URL override: `Client/.env.production.example`
-- Backend environment template: `Server/MuchToDo/.env.example`
-- MongoDB should point to your Atlas cluster.
-- Redis should point to the ElastiCache primary endpoint from the infrastructure outputs.
-- Production frontend origin: `http://prod-starttech-frontend-d1581ec0.s3-website-us-east-1.amazonaws.com`
-- Production backend base URL: `http://prod-backend-alb-823465914.us-east-1.elb.amazonaws.com`
+- `AWS_REGION`
+- `VITE_API_BASE_URL`
+- `FRONTEND_BUCKET_NAME`
+- `ECR_REPOSITORY`
+- `BACKEND_HEALTH_URL`
 
-## Local Workflow
+## Required SSM Parameters
 
-1. Configure `Server/MuchToDo/.env` from the example file.
-2. Set `Client/.env.production` or local Vite env values as needed.
-3. Run the frontend from `Client/` with `npm install` and `npm run dev`.
-4. Run the backend from `Server/MuchToDo/` with `go run ./cmd/api/main.go`.
+The backend expects these production parameters:
+
+- `/starttech/prod/mongo_uri`
+- `/starttech/prod/jwt_secret`
+- `/starttech/prod/db_name`
+- `/starttech/prod/redis_host`
+
+## Local Development
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Backend:
+
+```bash
+cd backend
+go run ./cmd/api/main.go
+```
+
+If you are running AWS commands locally for this project, use the production profile:
+
+```bash
+export AWS_PROFILE="krist"
+aws sts get-caller-identity
+```
+
+The returned account should be `327082974817`.

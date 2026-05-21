@@ -1,25 +1,67 @@
 # Application Runbook
 
-## Frontend Deployment
+## Frontend Deploy
 
-- Confirm the `frontend-ci-cd.yml` workflow completed successfully.
-- Check that the build uploaded to the expected S3 bucket.
-- Verify the uploaded build contains `index.html` and the latest hashed assets before testing the UI.
+1. Confirm the frontend workflow completed successfully.
+2. Verify the new bundle exists in `frontend/dist` before upload.
+3. Confirm the S3 website bucket contains the latest `index.html` and hashed asset files.
+4. Open the production frontend and confirm it is calling the expected backend base URL.
 
-## Backend Deployment
+## Backend Deploy
 
-- Confirm the image was pushed to the expected ECR repository.
-- Check the Auto Scaling instance refresh state in AWS.
-- Validate `BACKEND_HEALTH_URL` returns `200`.
-- Validate `http://prod-backend-alb-823465914.us-east-1.elb.amazonaws.com/health` reports dependency status after rollout.
-- Review the `/aws/ec2/starttech-prod/backend` log group for startup or dependency errors.
+1. Confirm the image was pushed to:
+   `327082974817.dkr.ecr.us-east-1.amazonaws.com/prod-starttech-backend`
+2. Confirm the deployment script or CI job is using AWS account `327082974817`.
+3. Verify the backend instances are reachable through SSM.
+4. Verify the ALB health-check endpoint is `/ping`.
+5. Validate:
+   - `http://prod-backend-alb-823465914.us-east-1.elb.amazonaws.com/ping`
+   - `http://prod-backend-alb-823465914.us-east-1.elb.amazonaws.com/health`
 
-## Rollback
+## Useful Scripts
 
-Run `scripts/rollback.sh` with the previous good image URI, the backend image SSM parameter name, and the ASG name. That updates the deployment pointer and triggers a fresh rolling refresh.
+- `scripts/deploy-backend.sh <image-uri>`
+- `scripts/health-check.sh <base-url>`
+- `scripts/rollback.sh <image-uri-or-tag>`
 
 ## Common Failure Modes
 
-- Frontend deploy fails: the bucket identifier or `VITE_API_BASE_URL` is missing from GitHub repository variables.
-- Backend image push fails: the OIDC role does not have ECR permissions.
-- Backend never becomes healthy: verify the MongoDB Atlas URI is present in SSM and that Redis and the ALB security groups are correct.
+### ALB returns `502`
+
+Check:
+
+- target group health in AWS
+- local container status on the EC2 instances
+- backend logs in `/starttech/backend`
+
+Most common causes:
+
+- backend process crashed during startup
+- MongoDB connection failure
+- wrong AWS account or profile used during deployment
+
+### Backend health check never turns green
+
+Check:
+
+- the target group is using `/ping`, not `/health`
+- the backend container is actually listening on `:8080`
+- the current deployment credentials point to account `327082974817`
+
+### MongoDB connection failure
+
+Check:
+
+- `/starttech/prod/mongo_uri` in SSM
+- MongoDB Atlas network access rules
+- TLS/connectivity errors in backend container logs
+
+### Rollback
+
+Use:
+
+```bash
+./scripts/rollback.sh <image-uri-or-tag>
+```
+
+This sends a command through SSM to restart the backend with the selected image.
