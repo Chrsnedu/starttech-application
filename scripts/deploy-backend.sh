@@ -5,6 +5,8 @@ IMAGE="${1:-}"
 REGION="${AWS_REGION:-us-east-1}"
 ENVIRONMENT="${ENVIRONMENT:-prod}"
 BACKEND_TAG_NAME="${BACKEND_TAG_NAME:-${ENVIRONMENT}-backend}"
+ACCOUNT_ID="327082974817"
+ALLOWED_ORIGINS="http://localhost:5173,http://prod-starttech-frontend-d1581ec0.s3-website-us-east-1.amazonaws.com"
 
 if [ -z "$IMAGE" ]; then
   echo "Usage: $0 <image-uri>"
@@ -60,7 +62,7 @@ aws ssm send-command \
     "DB_NAME=$(aws ssm get-parameter --name /starttech/prod/db_name --query Parameter.Value --output text --region '"$REGION"')",
     "REDIS_HOST=$(aws ssm get-parameter --name /starttech/prod/redis_host --query Parameter.Value --output text --region '"$REGION"')",
 
-    "aws ecr get-login-password --region '"$REGION"' | docker login --username AWS --password-stdin 327082974817.dkr.ecr.us-east-1.amazonaws.com",
+    "aws ecr get-login-password --region '"$REGION"' | docker login --username AWS --password-stdin '"$ACCOUNT_ID"'.dkr.ecr.'"$REGION"'.amazonaws.com",
 
     "docker system prune -af || true",
     "docker pull '"$IMAGE"'",
@@ -75,5 +77,6 @@ aws ssm send-command \
       -e JWT_SECRET_KEY=$JWT_SECRET \
       -e ENABLE_CACHE=true \
       -e REDIS_ADDR=$REDIS_HOST:6379 \
+      -e ALLOWED_ORIGINS='"$ALLOWED_ORIGINS"' \
       '"$IMAGE"'"
   ]'

@@ -8,7 +8,7 @@ if [ -z "$BASE_URL" ]; then
   exit 1
 fi
 
-URL="${BASE_URL%/}/health"
+URL="${BASE_URL%/}/ping"
 
 echo "Checking health endpoint..."
 
