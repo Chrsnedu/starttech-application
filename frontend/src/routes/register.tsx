@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { apiClient, getApiErrorMessage } from '@/lib/apiClient';
+import { apiClient } from '@/lib/apiClient';
 import { toast } from 'sonner';
 
 const registerSchema = z.object({
@@ -19,7 +19,6 @@ const registerSchema = z.object({
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
-type RegisterPayload = Omit<RegisterFormValues, 'confirmPassword'>;
 
 export const Route = createFileRoute('/register')({
     component: Register,
@@ -39,12 +38,8 @@ function Register() {
 
     const registerMutation = useMutation({
         mutationFn: async (data: RegisterFormValues) => {
-            const registerData: RegisterPayload = {
-                firstName: data.firstName,
-                lastName: data.lastName,
-                username: data.username,
-                password: data.password,
-            };
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { confirmPassword, ...registerData } = data;
             const response = await apiClient.post('/auth/register', registerData);
             return response.data;
         },
@@ -52,8 +47,9 @@ function Register() {
             toast.success('Account created successfully! Please log in.');
             navigate({ to: '/login' });
         },
-        onError: (error: unknown) => {
-            const message = getApiErrorMessage(error, 'Registration failed');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onError: (err: any) => {
+            const message = err.response?.data?.error || 'Registration failed';
             setError(message);
             toast.error(message);
         },

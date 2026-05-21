@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { apiClient, getApiErrorMessage } from '@/lib/apiClient';
+import { apiClient } from '@/lib/apiClient';
 import { useAuth } from '@/hooks/useAuth';
 import type { UpdateUserDTO } from '@/types/auth.types';
 import { toast } from 'sonner';
@@ -67,8 +67,9 @@ function ProfilePage() {
       toast.success('Profile updated successfully');
       setIsEditing(false);
     },
-    onError: (error: unknown) => {
-      const message = getApiErrorMessage(error, 'Failed to update profile');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (err: any) => {
+      const message = err.response?.data?.error || 'Failed to update profile';
       toast.error(message);
     },
   });
@@ -93,6 +94,7 @@ function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <User className="h-8 w-8 text-indigo-600" />
@@ -101,6 +103,7 @@ function ProfilePage() {
           <p className="mt-2 text-muted-foreground">Manage your account settings and preferences</p>
         </div>
 
+        {/* Profile Information Card */}
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -109,7 +112,10 @@ function ProfilePage() {
                 <CardDescription>Update your profile details</CardDescription>
               </div>
               {!isEditing && (
-                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditing(true)}
+                >
                   Edit Profile
                 </Button>
               )}
@@ -118,31 +124,50 @@ function ProfilePage() {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)}>
               <div className="space-y-4">
+                {/* First Name */}
                 <div>
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" type="text" disabled={!isEditing} {...register('firstName')} />
+                  <Input
+                    id="firstName"
+                    type="text"
+                    disabled={!isEditing}
+                    {...register('firstName')}
+                  />
                   {errors.firstName && (
                     <p className="text-destructive text-xs mt-1">{errors.firstName.message}</p>
                   )}
                 </div>
 
+                {/* Last Name */}
                 <div>
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" type="text" disabled={!isEditing} {...register('lastName')} />
+                  <Input
+                    id="lastName"
+                    type="text"
+                    disabled={!isEditing}
+                    {...register('lastName')}
+                  />
                   {errors.lastName && (
                     <p className="text-destructive text-xs mt-1">{errors.lastName.message}</p>
                   )}
                 </div>
 
+                {/* Username */}
                 <div>
                   <Label htmlFor="username">Username</Label>
-                  <Input id="username" type="text" disabled={!isEditing} {...register('username')} />
+                  <Input
+                    id="username"
+                    type="text"
+                    disabled={!isEditing}
+                    {...register('username')}
+                  />
                   {errors.username && (
                     <p className="text-destructive text-xs mt-1">{errors.username.message}</p>
                   )}
                 </div>
               </div>
 
+              {/* Action Buttons */}
               {isEditing && (
                 <div className="flex gap-3 mt-6">
                   <Button
@@ -153,7 +178,11 @@ function ProfilePage() {
                     <Save className="h-4 w-4" />
                     {updateProfileMutation.isPending ? 'Saving...' : 'Save Changes'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={handleCancel}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancel}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -162,7 +191,9 @@ function ProfilePage() {
           </CardContent>
         </Card>
 
+        {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Change Password */}
           <Link to="/change-password">
             <Card className="hover:border-primary transition-colors cursor-pointer h-full">
               <CardContent className="flex items-center gap-3 p-4">
@@ -177,6 +208,7 @@ function ProfilePage() {
             </Card>
           </Link>
 
+          {/* Delete Account */}
           <Card
             className="hover:border-destructive transition-colors cursor-pointer h-full"
             onClick={() => setShowDeleteModal(true)}
@@ -193,12 +225,17 @@ function ProfilePage() {
           </Card>
         </div>
 
-        <DeleteAccountDialog open={showDeleteModal} onOpenChange={setShowDeleteModal} />
+        {/* Delete Account Dialog */}
+        <DeleteAccountDialog
+          open={showDeleteModal}
+          onOpenChange={setShowDeleteModal}
+        />
       </div>
     </div>
   );
 }
 
+// Delete Account Dialog Component
 function DeleteAccountDialog({
   open,
   onOpenChange,
@@ -219,8 +256,9 @@ function DeleteAccountDialog({
       logout();
       window.location.href = '/login';
     },
-    onError: (error: unknown) => {
-      const message = getApiErrorMessage(error, 'Failed to delete account');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (err: any) => {
+      const message = err.response?.data?.error || 'Failed to delete account';
       toast.error(message);
     },
   });
@@ -245,7 +283,7 @@ function DeleteAccountDialog({
 
         <Alert variant="destructive">
           <AlertDescription>
-            <p className="font-medium mb-1">Warning: This action cannot be undone!</p>
+            <p className="font-medium mb-1">⚠️ Warning: This action cannot be undone!</p>
             <p className="text-sm">
               Deleting your account will permanently remove all your data, including tasks and profile information.
             </p>

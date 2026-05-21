@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { apiClient, getApiErrorMessage } from '@/lib/apiClient';
+import { apiClient } from '@/lib/apiClient';
 import type { ChangePasswordDTO } from '@/types/auth.types';
 import { toast } from 'sonner';
 import { KeyRound, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
@@ -54,8 +54,9 @@ function ChangePasswordPage() {
         navigate({ to: '/profile' });
       }, 1500);
     },
-    onError: (error: unknown) => {
-      const message = getApiErrorMessage(error, 'Failed to change password');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (err: any) => {
+      const message = err.response?.data?.error || 'Failed to change password';
       toast.error(message);
     },
   });
