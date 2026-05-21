@@ -19,7 +19,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: dev-starttech-backend
+  ECR_REPOSITORY: prod-starttech-backend
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
